@@ -5,71 +5,131 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 import psycopg2
 
-PESQUISA = "IMPROCEDÊNCIA DIREITO DO TRABALHO DECADÊNCIA BIENAL"
+PESQUISA = "Michael Jackson"
 
-def open_browser():
+def IniciarSeleWebdriver():
     servico = Service(ChromeDriverManager().install())
     navegador = webdriver.Chrome(service=servico)
+    
     return navegador
 
-def pesquisa_google(navegador):
-    navegador.get("https://www.google.com/")
-    navegador.find_element(By.XPATH, '/html/body/div[1]/div[3]/form/div[1]/div[1]/div[1]/div/div[2]/input').send_keys(PESQUISA, Keys.RETURN)
+def InsercaoPesquisa(navegador):
+    navegador.get(f'https://www.youtube.com//results?search_query={PESQUISA}')
 
-def resultado_pesquisa(navegador):
-    titulos = []
-
-    objTitulos = navegador.find_elements(By.XPATH,"//h3[contains(@class,'LC20lb')]")
-    for el in objTitulos:
-            if el.text != "":
-                titulos.append(el.text)
-    return titulos
-
-def integracao_pg():
+#Iniciando psycopg2
+def IniciarPsycopg():
     conn = psycopg2.connect(
-        database="Analise_CSV",
+        database="Analise_YT",
         user='postgres',
         password='postgres',
         host='localhost',
         port='5432'
-    )
-    
+        )
+        
     conn.autocommit = True
 
     cursor = conn.cursor()
+    
     return cursor, conn
 
-def renovacao_tabela(cursor):
-    sql = 'DROP TABLE IF EXISTS pesquisa'
+def ExcluirtabelaSeExiste(cursor):
+    sql = 'DROP TABLE IF EXISTS youtube'
     cursor.execute(sql)
 
-    sql2 = 'CREATE TABLE pesquisa ( objtitulos VARCHAR(100));'
+def CriarTabela(cursor):
+    sql2 = '''CREATE TABLE IF NOT EXISTS youtube (
+        identificacao SERIAL PRIMARY KEY,
+        titulos VARCHAR (500),
+        links VARCHAR (500),
+        nome_canal VARCHAR (500),
+        url VARCHAR (500)
+    );'''
     cursor.execute(sql2)
 
-def insercao_db(titulos, cursor):
-    for el in titulos:
-        sql3 = f"INSERT INTO pesquisa (objtitulos) VALUES ('{el}')"
+def PegarTitulos(navegador):
+    titulos = []
+
+    ElTitulos = navegador.find_elements(By.ID, 'video-title')
+
+    titulos = ElTitulos
+    
+    return titulos
+
+def PegarLinks(navegador):
+    links = []
+
+    ItensLinks = navegador.find_elements(By.XPATH, '//div[@id="dismissible"]//a[@href][@id="thumbnail"]')
+
+    links = ItensLinks
+    
+    return links
+
+def PegarNomeCanal(navegador):
+    NomeCanal = []
+
+    ObjNomeCanal = navegador.find_elements(By.XPATH, '//ytd-channel-name[@id="channel-name"][@class="long-byline style-scope ytd-video-renderer"]')
+
+    NomeCanal = ObjNomeCanal
+    
+    return NomeCanal
+
+def PegarUrl(navegador):
+    Url = []
+
+    VlrsUrl = navegador.find_elements(By.XPATH, '//div[@id="dismissible"]//a[@href][@id="thumbnail"]')
+
+    Url = VlrsUrl
+    
+    return Url
+
+def InserirItens(titulos,links,NomeCanal,Url,cursor):
+
+    for el,i,obj,vlr in list(zip(titulos, links, NomeCanal, Url)):
+        
+        el = el.text
+        el = str(el)
+        print(el.split())
+        if "'" in el:
+            el = el.replace("'","")
+        i = str(i.get_attribute("href").replace("https://www.youtube.com",""))
+        if i == " ":
+            links.remove(i)
+        
+        obj = str(obj.text)
+        if obj == " ":
+            NomeCanal.append(obj)
+
+        vlr = str(vlr.get_attribute("href"))    
+        sql3 = f"""INSERT INTO youtube (titulos, links, nome_canal, url) VALUES ('{el}','{i}','{obj}','{vlr}');"""
         cursor.execute(sql3)
 
-def finalizar_operacao_pg(conn):
+def FecharConeccaoSql(conn):
     conn.commit()
 
     conn.close()
 
 def main():
 
-    navegador = open_browser()
+    navegador = IniciarSeleWebdriver()
 
-    pesquisa_google(navegador)
+    InsercaoPesquisa(navegador)
 
-    titulos = resultado_pesquisa(navegador)
+    cursor, conn = IniciarPsycopg()
 
-    cursor, conn = integracao_pg()
+    ExcluirtabelaSeExiste(cursor)
 
-    renovacao_tabela(cursor)
+    CriarTabela(cursor)
 
-    insercao_db(titulos, cursor)
+    titulos = PegarTitulos(navegador)
 
-    finalizar_operacao_pg(conn)
+    links = PegarLinks(navegador)
+
+    NomeCanal = PegarNomeCanal(navegador)
+
+    Url = PegarUrl(navegador)
+
+    InserirItens(titulos,links,NomeCanal,Url,cursor)
+
+    FecharConeccaoSql(conn)
 
 main()

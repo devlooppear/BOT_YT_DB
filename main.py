@@ -2,22 +2,19 @@ from selenium import webdriver
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 import psycopg2
 
 PESQUISA = "Michael Jackson"
 
-def IniciarSeleWebdriver():
+def iniciar_sele_webdriver():
     servico = Service(ChromeDriverManager().install())
     navegador = webdriver.Chrome(service=servico)
-    
     return navegador
 
-def InsercaoPesquisa(navegador):
+def insercao_pesquisa(navegador):
     navegador.get(f'https://www.youtube.com//results?search_query={PESQUISA}')
 
-#Iniciando psycopg2
-def IniciarPsycopg():
+def iniciar_psycopg():
     conn = psycopg2.connect(
         database="Analise_YT",
         user='postgres',
@@ -25,111 +22,41 @@ def IniciarPsycopg():
         host='localhost',
         port='5432'
         )
-        
     conn.autocommit = True
+    return conn
 
-    cursor = conn.cursor()
-    
-    return cursor, conn
+def excluir_tabela_se_existe(cursor):
+    cursor.execute('DROP TABLE IF EXISTS youtube')
 
-def ExcluirtabelaSeExiste(cursor):
-    sql = 'DROP TABLE IF EXISTS youtube'
-    cursor.execute(sql)
+def criar_tabela(cursor):
+    cursor.execute('''CREATE TABLE IF NOT EXISTS youtube (
+        id SERIAL PRIMARY KEY,
+        titulo VARCHAR (500) NOT NULL,
+        link VARCHAR (500) NOT NULL,
+        nome_canal VARCHAR (500) NOT NULL,
+        url VARCHAR (500) NOT NULL
+    )''')
 
-def CriarTabela(cursor):
-    sql2 = '''CREATE TABLE IF NOT EXISTS youtube (
-        identificacao SERIAL PRIMARY KEY,
-        titulos VARCHAR (500),
-        links VARCHAR (500),
-        nome_canal VARCHAR (500),
-        url VARCHAR (500)
-    );'''
-    cursor.execute(sql2)
+def pegar_dados(navegador):
+    titulos = [el.text.replace("'", "") for el in navegador.find_elements(By.ID, 'video-title')]
+    links = [el.get_attribute('href').replace('https://www.youtube.com', '') for el in navegador.find_elements(By.XPATH, '//div[@id="dismissible"]//a[@href][@id="thumbnail"]')]
+    nome_canal = [el.text for el in navegador.find_elements(By.XPATH, '//ytd-channel-name[@id="channel-name"][@class="long-byline style-scope ytd-video-renderer"]')]
+    urls = [el.get_attribute('href') for el in navegador.find_elements(By.XPATH, '//div[@id="dismissible"]//a[@href][@id="thumbnail"]')]
+    return titulos, links, nome_canal, urls
 
-def PegarTitulos(navegador):
-    titulos = []
-
-    ElTitulos = navegador.find_elements(By.ID, 'video-title')
-
-    titulos = ElTitulos
-    
-    return titulos
-
-def PegarLinks(navegador):
-    links = []
-
-    ItensLinks = navegador.find_elements(By.XPATH, '//div[@id="dismissible"]//a[@href][@id="thumbnail"]')
-
-    links = ItensLinks
-    
-    return links
-
-def PegarNomeCanal(navegador):
-    NomeCanal = []
-
-    ObjNomeCanal = navegador.find_elements(By.XPATH, '//ytd-channel-name[@id="channel-name"][@class="long-byline style-scope ytd-video-renderer"]')
-
-    NomeCanal = ObjNomeCanal
-    
-    return NomeCanal
-
-def PegarUrl(navegador):
-    Url = []
-
-    VlrsUrl = navegador.find_elements(By.XPATH, '//div[@id="dismissible"]//a[@href][@id="thumbnail"]')
-
-    Url = VlrsUrl
-    
-    return Url
-
-def InserirItens(titulos,links,NomeCanal,Url,cursor):
-
-    for el,i,obj,vlr in list(zip(titulos, links, NomeCanal, Url)):
-        
-        el = el.text
-        el = str(el)
-        print(el.split())
-        if "'" in el:
-            el = el.replace("'","")
-        i = str(i.get_attribute("href").replace("https://www.youtube.com",""))
-        if i == " ":
-            links.remove(i)
-        
-        obj = str(obj.text)
-        if obj == " ":
-            NomeCanal.append(obj)
-
-        vlr = str(vlr.get_attribute("href"))    
-        sql3 = f"""INSERT INTO youtube (titulos, links, nome_canal, url) VALUES ('{el}','{i}','{obj}','{vlr}');"""
-        cursor.execute(sql3)
-
-def FecharConeccaoSql(conn):
-    conn.commit()
-
-    conn.close()
+def inserir_itens(dados, cursor):
+    sql = 'INSERT INTO youtube (titulo, link, nome_canal, url) VALUES (%s, %s, %s, %s)'
+    cursor.executemany(sql, dados)
 
 def main():
+    navegador = iniciar_sele_webdriver()
+    insercao_pesquisa(navegador)
+    conn = iniciar_psycopg()
+    with conn, conn.cursor() as cursor:
+        excluir_tabela_se_existe(cursor)
+        criar_tabela(cursor)
+        dados = list(zip(*pegar_dados(navegador)))
+        inserir_itens(dados, cursor)
 
-    navegador = IniciarSeleWebdriver()
-
-    InsercaoPesquisa(navegador)
-
-    cursor, conn = IniciarPsycopg()
-
-    ExcluirtabelaSeExiste(cursor)
-
-    CriarTabela(cursor)
-
-    titulos = PegarTitulos(navegador)
-
-    links = PegarLinks(navegador)
-
-    NomeCanal = PegarNomeCanal(navegador)
-
-    Url = PegarUrl(navegador)
-
-    InserirItens(titulos,links,NomeCanal,Url,cursor)
-
-    FecharConeccaoSql(conn)
-
-main()
+if __name__ == '__main__':
+    main()

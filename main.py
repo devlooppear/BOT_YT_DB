@@ -4,7 +4,7 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 import psycopg2
 
-PESQUISA = "Michael Jackson"
+PESQUISA = "Crepusculo"
 
 def iniciar_sele_webdriver():
     servico = Service(ChromeDriverManager().install())
@@ -31,22 +31,24 @@ def excluir_tabela_se_existe(cursor):
 def criar_tabela(cursor):
     cursor.execute('''CREATE TABLE IF NOT EXISTS youtube (
         id SERIAL PRIMARY KEY,
-        titulo VARCHAR (500) NOT NULL,
-        link VARCHAR (500) NOT NULL,
-        nome_canal VARCHAR (500) NOT NULL,
-        url VARCHAR (500) NOT NULL
+        titulo TEXT NOT NULL,
+        link VARCHAR (200) NOT NULL,
+        nome_canal VARCHAR (100) NOT NULL,
+        url VARCHAR (200) NOT NULL
     )''')
 
 def pegar_dados(navegador):
-    titulos = [el.text.replace("'", "") for el in navegador.find_elements(By.ID, 'video-title')]
+    titulos = [el.text for el in navegador.find_elements(By.ID, 'video-title')]
     links = [el.get_attribute('href').replace('https://www.youtube.com', '') for el in navegador.find_elements(By.XPATH, '//div[@id="dismissible"]//a[@href][@id="thumbnail"]')]
     nome_canal = [el.text for el in navegador.find_elements(By.XPATH, '//ytd-channel-name[@id="channel-name"][@class="long-byline style-scope ytd-video-renderer"]')]
     urls = [el.get_attribute('href') for el in navegador.find_elements(By.XPATH, '//div[@id="dismissible"]//a[@href][@id="thumbnail"]')]
     return titulos, links, nome_canal, urls
 
 def inserir_itens(dados, cursor):
-    sql = 'INSERT INTO youtube (titulo, link, nome_canal, url) VALUES (%s, %s, %s, %s)'
-    cursor.executemany(sql, dados)
+    for el in dados:
+        if el != ' ':
+            sql = 'INSERT INTO youtube (titulo, link, nome_canal, url) VALUES (%s, %s, %s, %s)'
+            cursor.executemany(sql, dados)
 
 def main():
     navegador = iniciar_sele_webdriver()

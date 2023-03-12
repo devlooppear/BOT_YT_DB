@@ -13,7 +13,7 @@
 - Como configurar no Postgres: para a integração com o Postgres, o código Python deve estar com as informações de acesso coincidentes, podendo serem definidas na função ``IniciarPsycopg()``, como é ilustrado a baixo:
 
 ```python
-def IniciarPsycopg():
+def iniciar_psycopg():
     conn = psycopg2.connect(
         database="Analise_YT",
         user='postgres',
@@ -21,6 +21,8 @@ def IniciarPsycopg():
         host='localhost',
         port='5432'
         )
+    conn.autocommit = True
+    return conn
 ```
 
 - Por isso, é possível tanto alterar essas informações para a integração, quanto criar o Banco de Dados (database)usuario 'postgres', senha 'postgres' e as outras informações, a não ser que tenham sido alteradas, já são as de padrão do postgres, como o 'localhost' e a posta escolhida ser '5432'.
